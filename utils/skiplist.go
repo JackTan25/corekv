@@ -1,13 +1,15 @@
 package utils
 
 import (
-	"github.com/hardcore-os/corekv/utils/codec"
 	"math/rand"
 	"sync"
+
+	"github.com/hardcore-os/corekv/utils/codec"
 )
 
 const (
 	defaultMaxLevel = 48
+	defaultMin      = -0x3f3f3f3f //这个主要是作为Skiplist的header的score来使用的
 )
 
 type SkipList struct {
@@ -23,7 +25,15 @@ type SkipList struct {
 
 func NewSkipList() *SkipList {
 	//implement me here!!!
-	return nil
+	//这里我们需要指定一个没有数据的头结点,他的score无穷小
+	return &SkipList{
+		header: newElement(defaultMin,nil,1),//头结点的score为最小值,data为空,
+											//然后level为1,目前整个skiplist只有这么一个没有意义的结点
+		rand: new(rand.Rand),
+		maxLevel: defaultMaxLevel,//注意这里的maxLevel是后面使用randLevel时需要使用到的,然后这里
+								  //要知道的是,后面在根据这个randLevel去插入的时候需要从底层往上去增加
+								  //因为这个level是可能大于header.level的长度的存在,因此我们需要从下
+	}
 }
 
 type Element struct {
