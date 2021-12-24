@@ -59,6 +59,7 @@ func (elem *Element) Entry() *codec.Entry {
 }
 
 func (list *SkipList) Add(data *codec.Entry) error {
+	list.lock.Lock()
 	//implement me here!!!
 	score := list.calcScore(data.Key)//计算出要插入的数据的分数
 	maxLevel := len(list.header.levels)
@@ -88,10 +89,12 @@ func (list *SkipList) Add(data *codec.Entry) error {
 	}
 	list.size += data.Size()
 	list.length++
+	list.lock.Unlock()
 	return nil
 }
 
-func (list *SkipList) Search(key []byte) (e *codec.Entry) {
+func (list *SkipList) Search(key []byte) (e *codec.Entry) {//search不要加锁,并且这里的测试比较简单
+	//只测试了读并发与写并发,对于写写与读写并发没有测试,也进行了对应的压力测试
 	//implement me here!!!
 	score := list.calcScore(key)
 	preElement := list.header
@@ -148,7 +151,7 @@ func (list *SkipList) randLevel() int {
 	//implement me here!!!
 	i:=1
 	for ;i<list.maxLevel;i++{
-		if list.rand.Int31n(2)==0{
+		if rand.Int31n(2)==0{
 			return i
 		}
 	}

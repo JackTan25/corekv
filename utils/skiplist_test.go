@@ -44,9 +44,9 @@ func TestSkipList_compare(t *testing.T) {
 
 func TestSkipListBasicCRUD(t *testing.T) {
 	list := NewSkipList()
-
 	//Put & Get
 	entry1 := codec.NewEntry([]byte("Key1"), []byte("Val1"))
+	// t.Log(list.Add(entry1))
 	assert.Nil(t, list.Add(entry1))
 	assert.Equal(t, entry1.Value, list.Search(entry1.Key).Value)
 
