@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"math/rand"
 	"sync"
 
@@ -27,12 +28,15 @@ func NewSkipList() *SkipList {
 	//implement me here!!!
 	//这里我们需要指定一个没有数据的头结点,他的score无穷小
 	return &SkipList{
-		header: newElement(defaultMin,nil,1),//头结点的score为最小值,data为空,
+		header: newElement(defaultMin,nil,defaultMaxLevel),//头结点的score为最小值,data为空,
 											//然后level为1,目前整个skiplist只有这么一个没有意义的结点
 		rand: new(rand.Rand),
 		maxLevel: defaultMaxLevel,//注意这里的maxLevel是后面使用randLevel时需要使用到的,然后这里
 								  //要知道的是,后面在根据这个randLevel去插入的时候需要从底层往上去增加
 								  //因为这个level是可能大于header.level的长度的存在,因此我们需要从下
+		length: 0,
+		lock: sync.RWMutex{},
+		size: 0,
 	}
 }
 
@@ -56,11 +60,54 @@ func (elem *Element) Entry() *codec.Entry {
 
 func (list *SkipList) Add(data *codec.Entry) error {
 	//implement me here!!!
+	score := list.calcScore(data.Key)//计算出要插入的数据的分数
+	maxLevel := len(list.header.levels)
+	preHeaders := [defaultMaxLevel]*Element{}
+	preElement := list.header
+	for i:=maxLevel-1;i>=0;i--{
+		next := preElement.levels[i]
+		preHeaders[i] = preElement
+		for ;next!=nil;next = preElement.levels[i]{
+			if score<=next.score{
+				if score==next.score{
+					next.entry = data
+					return nil
+				}
+				break
+			}
+			preElement = next
+		}
+		preHeaders[i] = preElement
+	}
+	//找到每一层应该插入的位置
+	level := list.randLevel()
+	ele := newElement(score,data,level)
+	for i:=0;i<level;i++{
+		ele.levels[i] = preHeaders[i].levels[i]
+		preHeaders[i].levels[i] = ele
+	}
+	list.size += data.Size()
+	list.length++
 	return nil
 }
 
 func (list *SkipList) Search(key []byte) (e *codec.Entry) {
 	//implement me here!!!
+	score := list.calcScore(key)
+	preElement := list.header
+	maxLevel := len(list.header.levels)
+	for i := maxLevel-1;i >= 0;i--{
+		next := preElement.levels[i]
+		for ;next!=nil;next = preElement.levels[i]{
+			if score <= next.score{
+				if score==next.score{
+					return next.entry
+				}
+				break
+			}
+			preElement = next
+		}
+	}
 	return nil
 }
 
@@ -82,20 +129,33 @@ func (list *SkipList) calcScore(key []byte) (score float64) {
 	}
 
 	score = float64(hash)
-	return
+	return score
 }
 
 func (list *SkipList) compare(score float64, key []byte, next *Element) int {
 	//implement me here!!!
-	return 0
+	if score == next.score{
+		return bytes.Compare(key,next.entry.Key)
+	}
+	if score<next.score{
+		return -1
+	}else{
+		return 1
+	}
 }
 
 func (list *SkipList) randLevel() int {
 	//implement me here!!!
-	return 0
+	i:=1
+	for ;i<list.maxLevel;i++{
+		if list.rand.Int31n(2)==0{
+			return i
+		}
+	}
+	return i
 }
 
 func (list *SkipList) Size() int64 {
 	//implement me here!!!
-	return 0
+	return list.size
 }
