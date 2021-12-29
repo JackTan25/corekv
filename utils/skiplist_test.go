@@ -1,12 +1,27 @@
+// Copyright 2021 hardcore-os Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License")
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package utils
 
 import (
 	"fmt"
+	"sync"
+	"testing"
+
 	"github.com/hardcore-os/corekv/utils/codec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"sync"
-	"testing"
 )
 
 func RandString(len int) string {
@@ -16,30 +31,6 @@ func RandString(len int) string {
 		bytes[i] = byte(b)
 	}
 	return string(bytes)
-}
-
-func TestSkipList_compare(t *testing.T) {
-	list := SkipList{
-		header:   nil,
-		rand:     nil,
-		maxLevel: 0,
-		length:   0,
-	}
-
-	byte1 := []byte("1")
-	byte2 := []byte("2")
-	entry1 := codec.NewEntry(byte1, byte1)
-
-	byte1score := list.calcScore(byte1)
-	byte2score := list.calcScore(byte2)
-
-	elem := &Element{
-		levels: nil,
-		entry:  entry1,
-		score:  byte2score,
-	}
-
-	assert.Equal(t, list.compare(byte1score, byte1, elem), -1)
 }
 
 func TestSkipListBasicCRUD(t *testing.T) {
@@ -75,7 +66,6 @@ func Benchmark_SkipListBasicCRUD(b *testing.B) {
 		assert.Equal(b, res, nil)
 		searchVal := list.Search([]byte(key))
 		assert.Equal(b, searchVal.Value, []byte(val))
-
 	}
 }
 

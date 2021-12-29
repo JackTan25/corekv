@@ -1,56 +1,122 @@
+// Copyright 2021 hardcore-os Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License")
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package lsm
 
 import (
+	"fmt"
+	"math/rand"
+	"os"
 	"testing"
+	"time"
 
-	"github.com/hardcore-os/corekv/file"
 	"github.com/hardcore-os/corekv/utils"
-	"github.com/hardcore-os/corekv/utils/codec"
 	"github.com/stretchr/testify/assert"
 )
 
-// 对level 管理器的功能测试
-func TestLevels(t *testing.T) {
-	entrys := []*codec.Entry{
-		{Key: []byte("hello0"), Value: []byte("world0"), ExpiresAt: uint64(0)},
-		{Key: []byte("hello1"), Value: []byte("world1"), ExpiresAt: uint64(0)},
-		{Key: []byte("hello2"), Value: []byte("world2"), ExpiresAt: uint64(0)},
-		{Key: []byte("hello3"), Value: []byte("world3"), ExpiresAt: uint64(0)},
-		{Key: []byte("hello4"), Value: []byte("world4"), ExpiresAt: uint64(0)},
-		{Key: []byte("hello5"), Value: []byte("world5"), ExpiresAt: uint64(0)},
-		{Key: []byte("hello6"), Value: []byte("world6"), ExpiresAt: uint64(0)},
-		{Key: []byte("hello7"), Value: []byte("world"), ExpiresAt: uint64(0)},
-	}
+var (
 	// 初始化opt
-	opt := &Options{
-		"../work_test",
+
+	opt = &Options{
+		WorkDir:             "../work_test",
+		SSTableMaxSz:        1024,
+		MemTableSize:        1024,
+		BlockSize:           1024,
+		BloomFalsePositive:  0.01,
+		BaseLevelSize:       10 << 20,
+		LevelSizeMultiplier: 10,
+		BaseTableSize:       2 << 20,
+		TableSizeMultiplier: 2,
+		NumLevelZeroTables:  15,
+		MaxLevelNum:         7,
+		NumCompactors:       5,
 	}
-	levelLive := func() {
-		// 初始化
-		levels := newLevelManager(opt)
-		defer func() { _ = levels.close() }()
-		// 构建内存表
-		imm := &memTable{
-			wal: file.OpenWalFile(&file.Options{}),
-			sl:  utils.NewSkipList(),
-		}
-		for _, entry := range entrys {
-			imm.set(entry)
-		}
-		// 测试 flush
-		assert.Nil(t, levels.flush(imm))
-		// 从levels中进行GET
-		v, err := levels.Get([]byte("Hello"))
-		assert.Nil(t, err)
-		assert.Equal(t, codec.Entry{Value: []byte("Corekv")}.Value, v)
-		t.Logf("levels.Get key=%s, value=%s, expiresAt=%d", v.Key, v.Value, v.Value)
-		// 关闭levels
-		assert.Nil(t, levels.close())
+)
+
+// 对level 管理器的功能测试
+func TestBase(t *testing.T) {
+	test := func() {
+		lsm := buildLSM()
+		// 基准chess
+		baseTest(t, lsm, 1)
 	}
 	// 运行N次测试多个sst的影响
-	for i := 0; i < 10; i++ {
-		levelLive()
+	runTest(test, 2)
+}
+
+// TestRecovery _
+func TestRecovery(t *testing.T) {
+	test := func() {
+		lsm := buildLSM()
+		// 测试正确性
+		baseTest(t, lsm, 5)
+		// 来一个新的wal文件
+		lsm.Set(buildEntry())
+	}
+	// 允许两次就能实现恢复
+	runTest(test, 1)
+}
+
+func buildLSM() *LSM {
+	// init DB Basic Test
+	lsm := NewLSM(opt)
+	return lsm
+}
+func buildEntry() *utils.Entry {
+	key := []byte(fmt.Sprintf("%s__12345678", randStr(16)))
+	value := []byte(randStr(128))
+	expiresAt := uint64(time.Now().Unix())
+	return &utils.Entry{
+		Key:       key,
+		Value:     value,
+		ExpiresAt: expiresAt,
+	}
+}
+func baseTest(t *testing.T, lsm *LSM, n int) {
+	e := buildEntry()
+	lsm.Set(e)
+	for i := 1; i < n; i++ {
+		lsm.Set(buildEntry())
+	}
+	// 从levels中进行GET
+	v, err := lsm.Get(e.Key)
+	assert.Nil(t, err)
+	assert.Equal(t, e.Value, v.Value)
+	t.Logf("levels.Get key=%s, value=%s, expiresAt=%d", v.Key, v.Value, v.ExpiresAt)
+}
+
+func runTest(test func(), n int) {
+	for i := 0; i < n; i++ {
+		test()
 	}
 }
 
-// 对level管理器的性能测试
+func randStr(length int) string {
+	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	bytes := []byte(str)
+	result := []byte{}
+	rand.Seed(time.Now().UnixNano() + int64(rand.Intn(100)))
+	for i := 0; i < length; i++ {
+		result = append(result, bytes[rand.Intn(len(bytes))])
+	}
+	return string(result)
+}
+
+func clearDir() {
+	_, err := os.Stat(opt.WorkDir)
+	if err == nil {
+		os.RemoveAll(opt.WorkDir)
+	}
+	os.Mkdir(opt.WorkDir, os.ModePerm)
+}
